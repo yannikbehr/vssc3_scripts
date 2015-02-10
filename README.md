@@ -1,2 +1,2 @@
-# vssc3_scripts
+# VS(SC3) scripts
 Scripts to analyse the performance of VS(SC3)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """
+Measure origin creation times, that is the time between the creation of the
+last pick and the creation of the first origin, in VS(SC3).
 Created on Jun 3, 2013
 
 @author: behry
@@ -10,12 +12,8 @@ import psycopg2.extras
 import MySQLdb
 import matplotlib.pyplot as plt
 from obspy import UTCDateTime
-import matplotlib.pyplot as plt
 import numpy as np
-import os
-import sys
 from scipy.stats import scoreatpercentile
-import ipdb
 
 
 class OriginCT:
@@ -26,7 +24,6 @@ class OriginCT:
         self.delays_t = []
         self.odb_delays = []
         self.pick_delays = []
-        self.delaysfile = '/home/behry/workspace/eew/delays/data/origin_estimation_delay_ch.npz'
 
     def get_delays(self, fout, host, database, user, passwd, port, author=None,
                    agency=None, latmin=None, latmax=None, lonmin=None,

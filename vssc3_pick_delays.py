@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Measure pick delays in SC3VS.
+Measure pick delays in VS(SC3).
 Created on Nov 7, 2013
 
 @author: behry
@@ -10,11 +10,9 @@ import psycopg2.extras
 import MySQLdb
 from obspy import UTCDateTime
 import numpy as np
-from scipy.stats import scoreatpercentile
 import matplotlib.pyplot as plt
 import json
 from collections import defaultdict
-import ipdb
 
 
 class PickDelay:

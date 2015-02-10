@@ -32,10 +32,10 @@ class OriginCT:
                    new=True, dbtype='postgresql'):
         if new:
             if dbtype == 'postgresql':
-                pcon = psycopg2.connect(database=database, user=user, password=passwd,
+                con = psycopg2.connect(database=database, user=user, password=passwd,
                                         port=port, host=host)
                 print "Database connection established"
-                mark = pcon.cursor(cursor_factory=psycopg2.extras.DictCursor)
+                mark = con.cursor(cursor_factory=psycopg2.extras.DictCursor)
                 query = """select eobject.m_publicid as eventid, oobject.m_publicid as originid,
                 origin.m_creationinfo_creationtime + (origin.m_creationinfo_creationtime_ms || ' microseconds')::interval as origin_ct,
                 max(pick.m_creationinfo_creationtime + (pick.m_creationinfo_creationtime_ms || ' microseconds')::interval) as latest_pick_ct,
@@ -157,7 +157,7 @@ class OriginCT:
                         self.pick_delays.append(UTCDateTime(pct) - UTCDateTime(pt))
                         self.odb_delays.append(float(odelay_db))
             np.savez(fout, delays=np.array(self.delays_ct))
-            pcon.close()
+            con.close()
         else:
             a = np.load(fout)
             self.delays_ct = a['delays']

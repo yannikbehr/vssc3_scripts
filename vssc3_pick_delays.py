@@ -113,9 +113,17 @@ if __name__ == '__main__':
                         default='1970-01-01T00:00:00')
     parser.add_argument('--end', help="Give end time for the query e.g. 2014-12-31T12:11:05",
                         default=UTCDateTime().strftime("%Y-%m-%dT%H:%M:%SZ"))
+    parser.add_argument('--networks', help="Give a comma separated list of \
+    network codes that you want to plot, e.g. 'CH,MN'")
     args = parser.parse_args()
     pd = PickDelay()
     pd.get_pick_delays(args.jsonfile, args.host, args.database, args.user, args.pwd,
                        args.port, new=args.new, dbtype=args.dbtype,
                        starttime=UTCDateTime(args.start), endtime=UTCDateTime(args.end))
-    pd.plot_delays(args.plotfile, networks=['*'])
+    if args.networks:
+        networks = []
+        for _n in args.networks.split(','):
+            networks.append(_n)
+    else:
+        networks = ['*']
+    pd.plot_delays(args.plotfile, networks=networks)

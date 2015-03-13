@@ -55,6 +55,10 @@ class PickDelay:
                 waveformID_networkCode as network, waveformID_stationCode as station
                 from Pick
                 where Pick.methodID = 'Trigger'"""
+                query += "and Pick.creationInfo_creationTime > "
+                query += "'%s' " % (starttime.strftime("%Y-%m-%d %H:%M:%S"))
+                query += "and Pick.creationInfo_creationTime <= "
+                query += "'%s'" % (endtime.strftime("%Y-%m-%d %H:%M:%S"))
             else:
                 raise Exception('Only postgresql and mysql are currently supported')
             mark.execute(query)

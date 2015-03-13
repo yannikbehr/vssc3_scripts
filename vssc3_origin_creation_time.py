@@ -150,11 +150,9 @@ class OriginCT:
                         self.pick_delays.append(UTCDateTime(pct) - UTCDateTime(pt))
                         self.odb_delays.append(odelay_db.total_seconds())
                     elif dbtype == 'mysql':
-                        self.delays_t.append(UTCDateTime(oct) - UTCDateTime(pt))
                         self.delays_ct.append(float(odelay))
                         self.events.append(evid)
                         self.ots.append(UTCDateTime(oct))
-                        self.pick_delays.append(UTCDateTime(pct) - UTCDateTime(pt))
                         self.odb_delays.append(float(odelay_db))
             np.savez(fout, delays=np.array(self.delays_ct))
             con.close()

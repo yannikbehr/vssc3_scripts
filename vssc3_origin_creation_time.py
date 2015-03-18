@@ -93,10 +93,10 @@ class OriginCT:
                 max(date_add(Pick.creationInfo_creationTime, interval Pick.creationInfo_creationTime_ms microsecond)) as latest_pick_ct,
                 max(date_add(Pick.time_value, interval Pick.time_value_ms microsecond)) as latest_pick_t,
                 originobject._timestamp as origin_in_db, max(pickobject._timestamp) as latest_pick_in_db,
-                date_add(Origin.creationInfo_creationTime, interval Origin.creationInfo_creationTime_ms microsecond) -
-                max(date_add(Pick.creationInfo_creationTime, interval Pick.creationInfo_creationTime_ms microsecond)) as locationdelay,
+                unix_timestamp(date_add(Origin.creationInfo_creationTime, interval Origin.creationInfo_creationTime_ms microsecond)) -
+                unix_timestamp(max(date_add(Pick.creationInfo_creationTime, interval Pick.creationInfo_creationTime_ms microsecond))) as locationdelay,
                 originobject._timestamp  - max(pickobject._timestamp) as locationdelay_in_db,
-                originobject._timestamp - date_add(Origin.creationInfo_creationTime, interval Origin.creationInfo_creationTime_ms microsecond) as origin_to_db_delay
+                originobject._timestamp - unix_timestamp(date_add(Origin.creationInfo_creationTime, interval Origin.creationInfo_creationTime_ms microsecond)) as origin_to_db_delay
 
                 from Arrival inner join Origin on Arrival._parent_oid = Origin._oid
                 inner join PublicObject as pobject on pobject.publicID = Arrival.pickID
@@ -152,8 +152,11 @@ class OriginCT:
                     elif dbtype == 'mysql':
                         self.delays_ct.append(float(odelay))
                         self.events.append(evid)
-                        self.ots.append(UTCDateTime(oct))
                         self.odb_delays.append(float(odelay_db))
+            print "Fastest event %s; delay %.3f s" \
+            % (self.events[np.argmin(self.delays_ct)], np.min(self.delays_ct))
+            print "Slowest event %s; delay %.3f s" \
+            % (self.events[np.argmax(self.delays_ct)], np.max(self.delays_ct))
             np.savez(fout, delays=np.array(self.delays_ct))
             con.close()
         else:
@@ -188,6 +191,7 @@ class OriginCT:
                 transform=ax1.transAxes, color='blue')
         ax1.set_xlabel('Event declaration time [s]')
         plt.savefig(fout, dpi=300)
+        plt.show()
 
         if False:
             # Plot the time difference between the arrival of the first origin

@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 from collections import defaultdict
+import ipdb
 
 
 class PickDelay:
@@ -22,7 +23,7 @@ class PickDelay:
 
     def get_pick_delays(self, fout, host, database, user, passwd, port,
                         starttime=UTCDateTime(0), endtime=UTCDateTime(),
-                        new=True, dbtype='postgresql'):
+                        new=True, dbtype='postgresql', pmethodid='Trigger'):
         if new:
             if dbtype == 'postgresql':
                 con = psycopg2.connect(database=database, user=user, port=port,
@@ -35,8 +36,8 @@ class PickDelay:
                 (pick.m_creationinfo_creationtime_ms || ' microseconds')::interval
                 - (pick.m_time_value + (pick.m_time_value_ms || ' microseconds')::interval) as tdiff,
                 pick.m_waveformid_networkcode as network, pick.m_waveformid_stationcode as station
-                from pick
-                where pick.m_methodid = 'Trigger' """
+                from pick """
+                query += "where pick.m_methodid = '%s' " % (pmethodid)
                 query += "and pick.m_creationinfo_creationtime > "
                 query += "'%s'::timestamp " % (starttime.strftime("%Y-%m-%d %H:%M:%S"))
                 query += "and pick.m_creationinfo_creationtime <= "
@@ -53,8 +54,8 @@ class PickDelay:
                 date_add(creationInfo_creationTime, interval creationInfo_creationTime_ms microsecond) -
                 date_add(time_value,interval time_value_ms microsecond) as tdiff,
                 waveformID_networkCode as network, waveformID_stationCode as station
-                from Pick
-                where Pick.methodID = 'Trigger'"""
+                from Pick """
+                query += "where Pick.methodID = '%s' " % (pmethodid)
                 query += "and Pick.creationInfo_creationTime > "
                 query += "'%s' " % (starttime.strftime("%Y-%m-%d %H:%M:%S"))
                 query += "and Pick.creationInfo_creationTime <= "
@@ -119,11 +120,14 @@ if __name__ == '__main__':
                         default=UTCDateTime().strftime("%Y-%m-%dT%H:%M:%SZ"))
     parser.add_argument('--networks', help="Give a comma separated list of \
     network codes that you want to plot, e.g. 'CH,MN'")
+    parser.add_argument('--pickmethod', help="Give the abbreviation that \
+    describes your automatic picks. Defaults to 'Trigger'.", default='Trigger')
     args = parser.parse_args()
     pd = PickDelay()
-    pd.get_pick_delays(args.jsonfile, args.host, args.database, args.user, args.pwd,
-                       args.port, new=args.new, dbtype=args.dbtype,
-                       starttime=UTCDateTime(args.start), endtime=UTCDateTime(args.end))
+    pd.get_pick_delays(args.jsonfile, args.host, args.database, args.user,
+                       args.pwd, args.port, new=args.new, dbtype=args.dbtype,
+                       starttime=UTCDateTime(args.start),
+                       endtime=UTCDateTime(args.end), pmethodid=args.pickmethod)
     if args.networks:
         networks = []
         for _n in args.networks.split(','):

@@ -10,6 +10,9 @@ obspy
 numpy  
 matplotlib  
 
+The script `data_latency.py` depends on the seiscomp3 Python api so you have to
+make sure it is on `PYTHONPATH`. The api is typically located under `$ROOTDIR/lib/python`.
+
 The '-h' option will give you help on the command line options.
 
 ## Examples
@@ -33,7 +36,7 @@ running on you can use ssh's port forwarding feature to access the database
 on 'dbhost.some.url' and it can be accessed through the server 'gateway.some.url'
 to which you have ssh access (username: 'sshuser'). Let's further assume the
 database type is MySQL listening on its default port 3306 and the database name is 'testdb' which we can access as user 'testuser' with password 'testpasswd'. To forward access to
-this machine to the local port '9999' run the following command in a new window:
+this machine to the local port 9999 run the following command in a new window:
 
       ssh -N -L 9999:dbhost.some.url:3306 -l sshuser gateway.some.url
 

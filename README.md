@@ -1,6 +1,6 @@
 # VS(SC3) scripts
 
-Scripts to analyse the performance of VS(SC3). To run them you will need the following
+Scripts to analyse the performance of VS(SC3). To run them you will need the following
 additional Python packages installed:
 
 psycopg2  

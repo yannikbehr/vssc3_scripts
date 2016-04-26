@@ -178,16 +178,16 @@ class OriginCT:
             ax2.set_ylabel('Origin creation - pick creation', color='b')
             for tl in ax2.get_yticklabels():
                 tl.set_color('g')
-        n, bins, patches = ax1.hist(self.delays_ct, bins=np.arange(0, 30., 0.5),
+        n, bins, patches = ax1.hist(self.delays_ct, bins=np.arange(0, 30., 1.0),
                                     color='blue', rwidth=1.0)
         med = np.median(self.delays_ct)
         percentile16 = scoreatpercentile(self.delays_ct, 16)
         percentile84 = scoreatpercentile(self.delays_ct, 84)
-        ax1.text(0.6, 0.7, 'Median: %.1f s' % (med), horizontalalignment='left',
+        ax1.text(0.1, 0.7, 'Median: %.1f s' % (med), horizontalalignment='left',
                 transform=ax1.transAxes, color='blue')
-        ax1.text(0.6, 0.65, '16th percentile: %.1f s' % (percentile16), horizontalalignment='left',
+        ax1.text(0.1, 0.65, '16th percentile: %.1f s' % (percentile16), horizontalalignment='left',
                 transform=ax1.transAxes, color='blue')
-        ax1.text(0.6, 0.6, '84th percentile: %.1f s' % (percentile84), horizontalalignment='left',
+        ax1.text(0.1, 0.6, '84th percentile: %.1f s' % (percentile84), horizontalalignment='left',
                 transform=ax1.transAxes, color='blue')
         ax1.set_xlabel('Event declaration time [s]')
         plt.savefig(fout, dpi=300)

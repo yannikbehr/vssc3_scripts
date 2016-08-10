@@ -133,7 +133,7 @@ class PickDelay:
                                            label=[_n for _n in delays.keys()],
                                            rwidth=1.0)
             ax.set_xlabel('Pick delays [s]')
-            ax.legend()
+            ax.legend(loc=2)
             plt.savefig(fout, dpi=300)
             plt.show()
         else:

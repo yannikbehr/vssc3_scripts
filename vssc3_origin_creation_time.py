@@ -153,15 +153,17 @@ class OriginCT:
                         self.delays_ct.append(float(odelay))
                         self.events.append(evid)
                         self.odb_delays.append(float(odelay_db))
+                        self.ots.append(UTCDateTime(oct))
             print "Fastest event %s; delay %.3f s" \
             % (self.events[np.argmin(self.delays_ct)], np.min(self.delays_ct))
             print "Slowest event %s; delay %.3f s" \
             % (self.events[np.argmax(self.delays_ct)], np.max(self.delays_ct))
-            np.savez(fout, delays=np.array(self.delays_ct))
+            np.savez(fout, delays=np.array(self.delays_ct), ots=np.array(self.ots))
             con.close()
         else:
             a = np.load(fout)
             self.delays_ct = a['delays']
+            #self.ots=a['ots']
 
     def plot_delays(self, fout):
         # Plot the time difference between the creation time of the first origin
@@ -179,17 +181,37 @@ class OriginCT:
             for tl in ax2.get_yticklabels():
                 tl.set_color('g')
         n, bins, patches = ax1.hist(self.delays_ct, bins=np.arange(0, 30., 0.5),
-                                    color='blue', rwidth=1.0)
+                                    color='blue', rwidth=1.0,
+                                    label=r''+str(len(self.delays_ct))+' events')# $\stackrel{from }{to}$') #'+str(np.min(self.ots))+'}{to '+str(np.max(self.ots))+'}$')
+
         med = np.median(self.delays_ct)
         percentile16 = scoreatpercentile(self.delays_ct, 16)
         percentile84 = scoreatpercentile(self.delays_ct, 84)
-        ax1.text(0.6, 0.7, 'Median: %.1f s' % (med), horizontalalignment='left',
-                transform=ax1.transAxes, color='blue')
-        ax1.text(0.6, 0.65, '16th percentile: %.1f s' % (percentile16), horizontalalignment='left',
-                transform=ax1.transAxes, color='blue')
-        ax1.text(0.6, 0.6, '84th percentile: %.1f s' % (percentile84), horizontalalignment='left',
-                transform=ax1.transAxes, color='blue')
+
+        if False:
+            ax1.text(0.6, 0.7, 'Median: %.1f s' % (med), horizontalalignment='left',
+                    transform=ax1.transAxes, color='blue')
+            ax1.text(0.6, 0.65, '16th percentile: %.1f s' % (percentile16), horizontalalignment='left',
+                    transform=ax1.transAxes, color='blue')
+            ax1.text(0.6, 0.6, '84th percentile: %.1f s' % (percentile84), horizontalalignment='left',
+                    transform=ax1.transAxes, color='blue')
+
+            ax1.text(0.6, 0.7, 'Median: %.1f s \n16th percentile: %.1f s \n84th percentile: %.1f s' % (med, percentile16, percentile84),
+                    horizontalalignment='left', transform=ax1.transAxes, color='blue',
+                    bbox=dict(facecolor='none', edgecolor='blue', boxstyle='round') )
+
+        ylim = ax1.get_ylim()
+        ax1.plot([med, percentile84], [ylim[-1]*.98, ylim[-1]*.98], '-', linewidth=3, label=r'84th percenile: '+str(percentile84)+'s' )
+        ax1.plot([med, percentile16], [ylim[-1]*.98, ylim[-1]*.98], '-', linewidth=6, label=r'16th percenile: '+str(percentile16)+'s')
+        ax1.plot([med], [ylim[-1]*.98], '+', linewidth=9, label='Median: %.1f s' % (med))
+
+        # ax.broken_barh([(midpoint-.4,.8)], (perc[3], perc[4]-perc[3]))
+
+        ax1.set_title(r''+'Distribution of event declaration times \n $\stackrel{To}{From}$')#+str(np.min(self.ots))+'}{to '+str(np.max(self.ots))+'}$')')
         ax1.set_xlabel('Event declaration time [s]')
+        ax1.set_ylabel('Count')
+        ax1.legend(fancybox=True)
+        plt.grid()
         plt.savefig(fout, dpi=300)
         plt.show()
 

@@ -120,20 +120,67 @@ class PickDelay:
         fig = plt.figure()
         ax = fig.add_subplot(111)
         delays = defaultdict(list)
+        stations_corresponding_to_delays = defaultdict(list)
+        pct_corresponding_to_delays = defaultdict(list)
         for _s in self.stations.keys():
             net, stat = _s.split('.')
             if net in networks or '*' in networks:
                 for _e in self.stations[_s]:
                     _d, _pct, _pt = _e
                     delays[net].append(_d)
+                    pct_corresponding_to_delays[net].append(UTCDateTime(_pct))
+                    stations_corresponding_to_delays[net].append(stat)
+        Npicks=[]
+        for _n in delays.keys():
+            Npicks.append(len(delays[_n]))
+        sorted_keys = np.asarray(delays.keys())
+        sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
+
+        if args.summary:
+            print "Summary by network"
+            for _n in sorted_keys:
+                min_pct_st = stations_corresponding_to_delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
+                min_pct_del = delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
+                min_pct = np.min(pct_corresponding_to_delays[_n])
+
+                max_pct_st = stations_corresponding_to_delays[_n][np.argmax(pct_corresponding_to_delays[_n])]
+                max_pct_del = delays[_n][np.argmax(pct_corresponding_to_delays[_n])]
+                max_pct = np.max(pct_corresponding_to_delays[_n])
+
+                min_del_st = stations_corresponding_to_delays[_n][np.argmin(delays[_n])]
+                min_del_pct = pct_corresponding_to_delays[_n][np.argmin(delays[_n])]
+                min_del = np.min(delays[_n])
+
+                max_del_st = stations_corresponding_to_delays[_n][np.argmax(delays[_n])]
+                max_del_pct = pct_corresponding_to_delays[_n][np.argmax(delays[_n])]
+                max_del = np.max(delays[_n])
+
+                print "- %s (%i picks) -" % (_n, len(delays[_n]) )
+                print "%s earliest pick: %s %s (delay: %.2f)" % (_n, min_pct_st, min_pct, min_pct_del)
+                print "%s latest pick: %s %s (delay: %.2f)" % (_n, max_pct_st, max_pct, max_pct_del)
+                print "%s minimum delay: %s %s (delay: %.2f)" % (_n, min_del_st, min_del_pct, min_del)
+                print "%s maximum delay: %s %s (delay: %.2f)" % (_n, max_del_st, max_del_pct, max_del)
+
+
+        big_enough = np.min([ 15, np.sum( Npicks > np.max(Npicks)/10.) ])
+        for i, _n in enumerate( sorted_keys ):
+            if i > big_enough:
+                sorted_keys[big_enough] = str(len(sorted_keys)-big_enough+1)+" more"
+                for _d in delays[ _n ]:
+                    delays[ sorted_keys[big_enough] ].append( _d )
+        sorted_keys = sorted_keys[: np.min([ big_enough+1, len(sorted_keys) ]) ]
+
         if len(delays.keys()) > 0:
-            n, bins, patches = ax.hist([delays[_n] for _n in delays.keys()],
+            n, bins, patches = ax.hist([delays[_n] for _n in sorted_keys], #delays.keys()],
                                            bins=np.arange(-30, 30, 1.0),
                                            histtype='barstacked',
-                                           label=[_n for _n in delays.keys()],
+                                           label=[_n for _n in sorted_keys], #delays.keys()],
                                            rwidth=1.0)
-            ax.set_xlabel('Pick delays [s]')
-            ax.legend(loc=2)
+            ax.set_title('Distribution of picks delays histogram')
+            ax.set_xlabel('Pick delay [s]')
+            ax.set_ylabel('Count')
+            ax.legend(loc=2, fancybox=True)
+            plt.grid()
             plt.savefig(fout, dpi=300)
             plt.show()
         else:

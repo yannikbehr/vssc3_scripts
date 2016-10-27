@@ -11,10 +11,11 @@ import MySQLdb
 from obspy import UTCDateTime
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import json
 from collections import defaultdict
 import ipdb
-
+from scipy.stats import scoreatpercentile
 
 class PickDelay:
 
@@ -116,26 +117,100 @@ class PickDelay:
         print "Minimum delay: %s %s (delay: %.2f)" % (min_del_st, min_del_pct, min_del)
         print "Maximum delay: %s %s (delay: %.2f)" % (max_del_st, max_del_pct, max_del)
 
-    def plot_delays(self, fout, networks=[]):
+    def plot_delays(self, fout, networks=[], noshow=False):
         fig = plt.figure()
         ax = fig.add_subplot(111)
+        flat = []
+        flat_pct= []
         delays = defaultdict(list)
+        stations_corresponding_to_delays = defaultdict(list)
+        pct_corresponding_to_delays = defaultdict(list)
         for _s in self.stations.keys():
             net, stat = _s.split('.')
             if net in networks or '*' in networks:
                 for _e in self.stations[_s]:
                     _d, _pct, _pt = _e
                     delays[net].append(_d)
+                    flat.append(_d)
+                    pct_corresponding_to_delays[net].append(UTCDateTime(_pct))
+                    flat_pct.append(UTCDateTime(_pct))
+                    stations_corresponding_to_delays[net].append(stat)
+        Npicks=[]
+        for _n in delays.keys():
+            Npicks.append(len(delays[_n]))
+        sorted_keys = np.asarray(delays.keys())
+        sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
+
+        if args.summary:
+            print "Summary by network"
+            for _n in sorted_keys:
+                min_pct_st = stations_corresponding_to_delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
+                min_pct_del = delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
+                min_pct = np.min(pct_corresponding_to_delays[_n])
+
+                max_pct_st = stations_corresponding_to_delays[_n][np.argmax(pct_corresponding_to_delays[_n])]
+                max_pct_del = delays[_n][np.argmax(pct_corresponding_to_delays[_n])]
+                max_pct = np.max(pct_corresponding_to_delays[_n])
+
+                min_del_st = stations_corresponding_to_delays[_n][np.argmin(delays[_n])]
+                min_del_pct = pct_corresponding_to_delays[_n][np.argmin(delays[_n])]
+                min_del = np.min(delays[_n])
+
+                max_del_st = stations_corresponding_to_delays[_n][np.argmax(delays[_n])]
+                max_del_pct = pct_corresponding_to_delays[_n][np.argmax(delays[_n])]
+                max_del = np.max(delays[_n])
+
+                print "- %s (%i picks) -" % (_n, len(delays[_n]) )
+                print "%s earliest pick: %s %s (delay: %.2f)" % (_n, min_pct_st, min_pct, min_pct_del)
+                print "%s latest pick: %s %s (delay: %.2f)" % (_n, max_pct_st, max_pct, max_pct_del)
+                print "%s minimum delay: %s %s (delay: %.2f)" % (_n, min_del_st, min_del_pct, min_del)
+                print "%s maximum delay: %s %s (delay: %.2f)" % (_n, max_del_st, max_del_pct, max_del)
+
+
+        big_enough = np.min([ 15, np.sum( Npicks > np.max(Npicks)/20.) ])
+        for i, _n in enumerate( sorted_keys ):
+            if i > big_enough:
+                sorted_keys[big_enough] = str(len(sorted_keys)-big_enough+1)+" more"
+                for _d in delays[ _n ]:
+                    delays[ sorted_keys[big_enough] ].append( _d )
+        sorted_keys = sorted_keys[: np.min([ big_enough+1, len(sorted_keys) ]) ]
+
         if len(delays.keys()) > 0:
-            n, bins, patches = ax.hist([delays[_n] for _n in delays.keys()],
+            n, bins, patches = ax.hist([delays[_n] for _n in sorted_keys], #delays.keys()],
                                            bins=np.arange(-30, 30, 1.0),
                                            histtype='barstacked',
-                                           label=[_n for _n in delays.keys()],
+                                           label=[_n for _n in sorted_keys], #delays.keys()],
                                            rwidth=1.0)
-            ax.set_xlabel('Pick delays [s]')
-            ax.legend()
+
+            first = np.min(flat_pct)
+            last  = np.max(flat_pct)
+
+            med = np.median(flat)
+            percentile16 = scoreatpercentile(flat, 16)
+            percentile84 = scoreatpercentile(flat, 84)
+            ylim = ax.get_ylim()
+
+            ax.add_patch(Rectangle((med-percentile84/2,ylim[0]),
+                percentile84, ylim[-1],
+                zorder=0, alpha=0.2, facecolor='grey', linewidth=0, label=r'%$\stackrel{ile}{84th}$: '+str(percentile84)+'s' ))
+            ax.add_patch(Rectangle((med-percentile16/2,ylim[0]),
+                percentile16, ylim[-1],
+                zorder=0, alpha=0.5, facecolor='grey', linewidth=0, label=r'%$\stackrel{ile}{16th}$: '+str(percentile16)+'s' ))
+            ax.add_patch(Rectangle((med, ylim[0]),
+                0., ylim[-1],
+                zorder=0, edgecolor='grey',facecolor='grey',linewidth=3,label='Median: %.1f s' % (med)))
+
+            ax.set_title(r''+'Distribution of picks delays \n $\stackrel{From\ '+str(first)+'}{To\ '+str(last)+'}$')
+            ax.set_xlabel('Pick delay [s]')
+            ax.set_ylabel('Count')
+            ax.legend(loc=2, fancybox=True)
+            plt.grid()
             plt.savefig(fout, dpi=300)
-            plt.show()
+            if noshow :
+                pass
+            else:
+                plt.show()
+
         else:
             print 'No data found for ', networks
 
@@ -152,6 +227,8 @@ if __name__ == '__main__':
     parser.add_argument('--plotfile', help="Path for png file showing pick delay distribution.",
                         default=None)
     parser.add_argument('--new', help="Reread data from database even if json file exists.",
+                        action='store_true')
+    parser.add_argument('--noshow', help="Saves plot without showing.",
                         action='store_true')
     parser.add_argument('--start', help="Give start time for the query e.g. 2014-12-31T12:11:05",
                         default='1970-01-01T00:00:00')
@@ -178,4 +255,4 @@ if __name__ == '__main__':
     if args.summary:
         pd.summary()
     if args.plotfile is not None:
-        pd.plot_delays(args.plotfile, networks=networks)
+        pd.plot_delays(args.plotfile, networks=networks, noshow=args.noshow)

@@ -20,6 +20,7 @@ from mpl_toolkits.basemap import Basemap
 from matplotlib.colorbar import ColorbarBase
 from matplotlib.colors import Normalize
 from matplotlib.pyplot import cm
+from matplotlib.patches import Rectangle
 
 
 def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
@@ -35,8 +36,8 @@ def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
         streams = defaultdict(dict)
         delays = defaultdict(list)
         f = open(fin)
-        first = None
-        last = None
+        first = 9999999999999999 #None
+        last = 0 #None
         while True:
             line = f.readline()
             if not line: break
@@ -76,10 +77,10 @@ def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
                         continue
                 else:
                     continue
-                if cnt == 0:
-                    first = timestamp
-                if cnt == maxcount:
-                    last = timestamp
+                #if cnt == 0:
+                first = np.min([first, timestamp])
+                #if cnt == maxcount-1:
+                last = np.max([last, timestamp])
                 delays[station].append(tdiff)
                 cnt += 1
             else:
@@ -90,37 +91,98 @@ def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
         print last
         f.close()
         fh = open(delayfile, 'w')
-        json.dump(delays, fh)
+        json.dump({'delays':delays,'first':str(first),'last':str(last)}, fh)
         fh.close()
     else:
         fh = open(delayfile)
-        delays = json.load(fh)
+        tmp = json.load(fh)
+        delays = tmp['delays']
+        first = tmp['first']
+        last = tmp['last']
         fh.close()
-    return delays
+    return delays, first, last
 
-def plot_hist(delays):
+def plot_hist(delays, first, last, stations=False, noshow=False):
     """
     Plot a histogram of the envelope delays for all stations combined.
     """
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
     alldelays = []
     for _s in delays.keys():
         alldelays += delays[_s]
-    if len(alldelays) > 0:
-        n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.5),
-                                   color='green', histtype='bar', rwidth=1.0)
-    ax.set_xlabel('Envelope delays [s]')
-    med = np.median(alldelays)
-    percentile25 = scoreatpercentile(alldelays, 25)
-    percentile75 = scoreatpercentile(alldelays, 75)
-    ax.text(0.6, 0.80, 'Median: %.1f s' % (med), horizontalalignment='left',
-            transform=ax.transAxes, color='black')
-    ax.text(0.6, 0.75, '25th percentile: %.1f s' % (percentile25), horizontalalignment='left',
-            transform=ax.transAxes, color='black')
-    ax.text(0.6, 0.70, '75th percentile: %.1f s' % (percentile75), horizontalalignment='left',
-            transform=ax.transAxes, color='black')
-    plt.show()
+
+    flat =  [elem for elem in alldelays if elem <30 and elem>0]
+    med = np.median(flat)
+    percentile16 = scoreatpercentile(flat, 16)
+    percentile84 = scoreatpercentile(flat, 84)
+
+    Npicks=[]
+    delays_list = delays.copy()
+    delays_cumul_list = delays.copy()
+
+    for _n in delays.keys():
+        tmpx = np.sort([elem for elem in delays[_n] if elem<=30 and elem>=0])
+        tmpx = np.append(tmpx,med)
+        tmpy = np.cumsum(tmpx)
+        tmpy = tmpy/tmpy[-1]
+        Npicks.append( np.mean( tmpy ) )
+        delays_list[_n] = list(tmpx)
+        delays_cumul_list[_n] = list(tmpy*100.)
+
+    sorted_keys = np.asarray(delays.keys())
+    sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
+    print('station list from worst to best')
+    nstation = -1
+    for g in range(0, len(sorted_keys), 9):
+
+
+        fig = plt.figure()
+        plt.clf()
+        ax = fig.add_subplot(111)
+        ax.text(0.5, 0.5, str(g/9),
+            horizontalalignment='center',
+            verticalalignment='center',
+            zorder=-999,
+            alpha=0.4,fontsize=200, color='grey',
+            transform=ax.transAxes)
+
+        ylim = [1,100]
+        if len(alldelays) > 0:
+            tmp = np.cumsum(np.sort(flat))/np.sum(flat)*100
+            #ax.fill_between(np.sort(flat)[1:],0.00000001, np.diff(tmp), label='All (hist.)', linewidth=2.0, color='grey', alpha=0.8)
+            ax.semilogy(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
+
+            n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.1),bottom=np.min(tmp),
+                                   label='All (hist.)', color='grey', alpha=0.8, rwidth=2.0, normed=stations, histtype='step',log=True)
+            ylim = [np.min(n[-10:]),100.]
+
+        keys = sorted_keys[g:g+7]
+        if stations:
+            for ik,k in enumerate(keys):
+                nstation+=1
+                print(str(g/9)+"."+str(ik)+": "+str(k)+" ("+str(nstation)+")")
+                ax.semilogy(delays_list[k], delays_cumul_list[k], label=k)
+
+
+
+        ax.add_patch(Rectangle((med-percentile84/2,ylim[0]),
+            percentile84, ylim[-1],
+            zorder=0, alpha=0.2, facecolor='grey', linewidth=0, label=r'%$\stackrel{ile}{84th}$: '+str(percentile84)+'s' ))
+        ax.add_patch(Rectangle((med-percentile16/2,ylim[0]),
+            percentile16, ylim[-1],
+            zorder=0, alpha=0.5, facecolor='grey', linewidth=0, label=r'%$\stackrel{ile}{16th}$: '+str(percentile16)+'s' ))
+        ax.add_patch(Rectangle((med, ylim[0]),
+            0., ylim[-1],
+            zorder=0, edgecolor='grey',facecolor='grey',linewidth=3,label='Median: %.1f s' % (med)))
+
+        ax.set_title(r''+'Distribution of envelope delays \n $\stackrel{From\ '+str(first)+'}{To\ '+str(last)+'}$')
+        ax.set_xlabel('Envelope delays [s]')
+        ax.set_ylabel('% of delays')
+        ax.legend(loc=4, fancybox=True, framealpha=0.5)
+        plt.grid()
+        ax.set_ylim(ylim)
+        plt.savefig('envelope_delays_group'+str(g/9)+'.pdf')
+        if not noshow:
+            plt.show()
 
 
 if __name__ == '__main__':
@@ -133,8 +195,15 @@ if __name__ == '__main__':
     parser.add_argument('--new', help='If true parse the envelope log file. \
     Otherwise plot the histogram for the delays given in the output file.',
     action='store_true')
+    parser.add_argument('--stations', help='If true plot each station separately. \
+    Otherwise plot all station together.',
+    action='store_true')
+    parser.add_argument('--noshow', help='If true save each station plot without showing. \
+    Otherwise plot all station together.',
+    action='store_true')
     args = parser.parse_args()
-    delays = envelope_delays(args.fin, args.fout, maxcount=1000000,
+    args = parser.parse_args()
+    delays, first, last = envelope_delays(args.fin, args.fout, maxcount=1000000,
                              new=args.new)
-    plot_hist(delays)
+    plot_hist(delays, first, last, stations=args.stations, noshow=args.noshow)
 

@@ -164,7 +164,8 @@ class OriginCT:
         else:
             a = np.load(fout)
             self.delays_ct = a['delays']
-            #self.ots=a['ots']
+            if 'ots' in a:
+                self.ots=a['ots']
 
     def plot_delays(self, fout, noshow=False):
         # Plot the time difference between the creation time of the first origin
@@ -218,7 +219,11 @@ class OriginCT:
 
 
         ax1.set_xlim( [ 0., ax1.get_xlim()[-1] ] )
-        ax1.set_title(r''+'Distribution of event declaration times \n $\stackrel{To}{From}$')#+str(np.min(self.ots))+'}{to '+str(np.max(self.ots))+'}$')')
+        if not self.ots:
+            ax1.set_title(r''+'Distribution of event declaration times')
+        else :
+            ax1.set_title(''+'Distribution of event declaration times \n $\stackrel{'+str(min(self.ots))+'}{to '+str(max(self.ots))+'}$')
+
         ax1.set_xlabel('Event declaration time [s]')
         ax1.set_ylabel('Count')
         ax1.legend(fancybox=True)

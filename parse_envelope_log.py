@@ -102,7 +102,7 @@ def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
         fh.close()
     return delays, first, last
 
-def plot_hist(delays, first, last, stations=False, noshow=False):
+def plot_hist(delays, first, last, log=False, stations=False, noshow=False, old=False):
     """
     Plot a histogram of the envelope delays for all stations combined.
     """
@@ -127,33 +127,52 @@ def plot_hist(delays, first, last, stations=False, noshow=False):
         Npicks.append( np.mean( tmpy ) )
         delays_list[_n] = list(tmpx)
         delays_cumul_list[_n] = list(tmpy*100.)
-
-    sorted_keys = np.asarray(delays.keys())
-    sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
-    print('station list from worst to best')
-    nstation = -1
+    
+    sorted_keys = np.asarray([0])
+    if stations:
+        sorted_keys = np.asarray(delays.keys())
+        sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
+        print('station list from worst to best')
+        nstation = -1
+        
     for g in range(0, len(sorted_keys), 9):
 
 
         fig = plt.figure()
         plt.clf()
         ax = fig.add_subplot(111)
-        ax.text(0.5, 0.5, str(g/9),
-            horizontalalignment='center',
-            verticalalignment='center',
-            zorder=-999,
-            alpha=0.4,fontsize=200, color='grey',
-            transform=ax.transAxes)
+        if stations:
+            ax.text(0.5, 0.5, str(g/9),
+                horizontalalignment='center',
+                verticalalignment='center',
+                zorder=-999,
+                alpha=0.4,fontsize=200, color='grey',
+                transform=ax.transAxes)
 
         ylim = [1,100]
         if len(alldelays) > 0:
-            tmp = np.cumsum(np.sort(flat))/np.sum(flat)*100
-            #ax.fill_between(np.sort(flat)[1:],0.00000001, np.diff(tmp), label='All (hist.)', linewidth=2.0, color='grey', alpha=0.8)
-            ax.semilogy(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
+            xh = np.linspace(0., 30., 1000)
+            tmp = np.linspace(0., 1., num=len(flat) ) #np.cumsum(np.sort(flat))/np.sum(flat)
+            tmpcum = np.interp(xh, np.sort(flat), tmp)
+            tmphist = tmpcum.copy()*0.
+            tmphist[100:-50] = tmpcum[150:] - tmpcum[:-150]
+            tmphist[:100] = tmpcum[50:150] - tmpcum[50]
+            tmphist[-50:] = tmpcum[-1] - tmpcum[-150:-100]
 
-            n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.1),bottom=np.min(tmp),
-                                   label='All (hist.)', color='grey', alpha=0.8, rwidth=2.0, normed=stations, histtype='step',log=True)
-            ylim = [np.min(n[-10:]),100.]
+            if log:
+                ax.fill_between(xh,1, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', facecolor='white', alpha=1.)
+                ax.semilogy(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
+                #ax.semilogy(xh, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', alpha=1.)
+            
+            elif old:            
+                n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.5),#bottom=np.min(tmp), 
+                                           label='All (hist.)', color='black', facecolor='grey', alpha=1., rwidth=2.0, 
+                                           normed=True, histtype='step',log=log)#, bottom=1.)
+            else:
+                ax.fill_between(xh,1, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', facecolor='white', alpha=1.)
+                ax.plot(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
+                
+            ylim = [np.max([.001,1./len(flat)]),1.]
 
         keys = sorted_keys[g:g+7]
         if stations:

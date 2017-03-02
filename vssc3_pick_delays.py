@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import json
 from collections import defaultdict
-import ipdb
+#import ipdb
 from scipy.stats import scoreatpercentile
 
 class PickDelay:

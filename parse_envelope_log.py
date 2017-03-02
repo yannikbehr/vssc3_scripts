@@ -5,7 +5,7 @@ Created on Nov 7, 2013
 
 @author: behry
 """
-
+import glob
 import logging
 import logging.handlers
 import os
@@ -23,70 +23,79 @@ from matplotlib.pyplot import cm
 from matplotlib.patches import Rectangle
 
 
-def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
+def envelope_delays(fin, delayfile=None, maxcount=1000000, new=False, networks=['*'], stations=[]):
     """
     Evaluate the envelope log file that is produced by scvsmag.
     """
     logging.basicConfig(filename='parse_envelope_log.log', filemode='w',
                         level=logging.DEBUG)
+
+    for file in glob.glob(fin):
+        if delayfile:
+            pass
+        else:
+            delayfile=file.replace('.log', '.json')
+        f = open(file)
+
     if new:
         pat = r'(\S+ \S+) \[envelope/info/VsMagnitude\] Current time: (\S+);'
         pat += r' Envelope: timestamp: (\S+) waveformID: (\S+)'
         cnt = 0
         streams = defaultdict(dict)
         delays = defaultdict(list)
-        f = open(fin)
         first = 9999999999999999 #None
         last = 0 #None
-        while True:
-            line = f.readline()
-            if not line: break
-            if cnt > maxcount: break
-            match = re.search(pat, line)
-            if match:
-                ttmp = match.group(1)
-                dt, t = ttmp.split()
-                year, month, day = map(int, dt.split('/'))
-                hour, min, sec = map(int, t.split(':'))
-                logtime = UTCDateTime(year, month, day, hour, min, sec)
-                currentTime = UTCDateTime(match.group(2))
-                # the timestamp marks the beginning of the data window
-                # so we have to add one second to get the time of the end
-                # of the data window
-                timestamp = UTCDateTime(match.group(3)) + 1.
-                ts_string = timestamp.strftime("%Y-%m-%dT%H:%M:%S")
-                wID = match.group(4)
-                station = wID.split('.')[0] + '.' + wID.split('.')[1]
-                net = wID.split('.')[0]
-                tdiff = currentTime - timestamp
-                streams[wID][ts_string] = currentTime
-                # We are looking for the time that is required to have 3 s of
-                # envelopes following a P arrival. We therefore have to add the
-                # time difference of the envelope 3 s after the arrival of the
-                # current one which is equivalent to measuring the time
-                # difference to the arrival time of the envelope 3 s before
-                # the latest one.
-                if len(streams[wID].keys()) >= 4:
-                    try:
-                        old_ts = (timestamp - 3.).strftime("%Y-%m-%dT%H:%M:%S")
-                        old_ct = streams[wID][old_ts]
-                        tdiff += (currentTime - old_ct)
-                        # tdiff = currentTime - old_ct
-                    except Exception, e:
-                        logging.debug('%s %s: %s' % (wID, old_ts, e))
+        for file in glob.glob(fin):
+            f = open(file)
+            while True:
+                line = f.readline()
+                if not line: break
+                if cnt > maxcount: break
+                match = re.search(pat, line)
+                if match:
+                    ttmp = match.group(1)
+                    dt, t = ttmp.split()
+                    year, month, day = map(int, dt.split('/'))
+                    hour, min, sec = map(int, t.split(':'))
+                    logtime = UTCDateTime(year, month, day, hour, min, sec)
+                    currentTime = UTCDateTime(match.group(2))
+                    # the timestamp marks the beginning of the data window
+                    # so we have to add one second to get the time of the end
+                    # of the data window
+                    timestamp = UTCDateTime(match.group(3)) + 1.
+                    ts_string = timestamp.strftime("%Y-%m-%dT%H:%M:%S")
+                    wID = match.group(4)
+                    station = wID.split('.')[0] + '.' + wID.split('.')[1]
+                    net = wID.split('.')[0]
+                    tdiff = currentTime - timestamp
+                    streams[wID][ts_string] = currentTime
+                    # We are looking for the time that is required to have 3 s of
+                    # envelopes following a P arrival. We therefore have to add the
+                    # time difference of the envelope 3 s after the arrival of the
+                    # current one which is equivalent to measuring the time
+                    # difference to the arrival time of the envelope 3 s before
+                    # the latest one.
+                    if len(streams[wID].keys()) >= 4:
+                        try:
+                            old_ts = (timestamp - 3.).strftime("%Y-%m-%dT%H:%M:%S")
+                            old_ct = streams[wID][old_ts]
+                            tdiff += (currentTime - old_ct)
+                            # tdiff = currentTime - old_ct
+                        except Exception, e:
+                            logging.debug('%s %s: %s' % (wID, old_ts, e))
+                            continue
+                    else:
                         continue
+                    #if cnt == 0:
+                    first = np.min([first, timestamp])
+                    #if cnt == maxcount-1:
+                    last = np.max([last, timestamp])
+                    delays[station].append(tdiff)
+                    cnt += 1
                 else:
-                    continue
-                #if cnt == 0:
-                first = np.min([first, timestamp])
-                #if cnt == maxcount-1:
-                last = np.max([last, timestamp])
-                delays[station].append(tdiff)
-                cnt += 1
-            else:
-                print "problem with line %d" % cnt
-                print line
-                break
+                    print "problem with line %d" % cnt
+                    print line
+                    break
         print first
         print last
         f.close()
@@ -96,10 +105,23 @@ def envelope_delays(fin, delayfile, maxcount=1000000, new=False):
     else:
         fh = open(delayfile)
         tmp = json.load(fh)
-        delays = tmp['delays']
+        fh.close()
+
         first = tmp['first']
         last = tmp['last']
-        fh.close()
+        tmpdelays = tmp['delays']
+        delays = defaultdict(list)
+
+        for k in tmpdelays.keys():
+            if k.split('.')[0] in networks or '*' in networks :
+                pass
+            elif k.split('.')[1] in stations or '*' in stations :
+                pass
+            else:
+                continue
+            delays[k].append(tmpdelays[k][0])
+
+
     return delays, first, last
 
 def plot_hist(delays, first, last, log=False, stations=False, noshow=False, old=False):
@@ -127,14 +149,14 @@ def plot_hist(delays, first, last, log=False, stations=False, noshow=False, old=
         Npicks.append( np.mean( tmpy ) )
         delays_list[_n] = list(tmpx)
         delays_cumul_list[_n] = list(tmpy*100.)
-    
+
     sorted_keys = np.asarray([0])
     if stations:
         sorted_keys = np.asarray(delays.keys())
         sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
         print('station list from worst to best')
         nstation = -1
-        
+
     for g in range(0, len(sorted_keys), 9):
 
 
@@ -163,15 +185,15 @@ def plot_hist(delays, first, last, log=False, stations=False, noshow=False, old=
                 ax.fill_between(xh,1, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', facecolor='white', alpha=1.)
                 ax.semilogy(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
                 #ax.semilogy(xh, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', alpha=1.)
-            
-            elif old:            
-                n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.5),#bottom=np.min(tmp), 
-                                           label='All (hist.)', color='black', facecolor='grey', alpha=1., rwidth=2.0, 
+
+            elif old:
+                n, bins, patches = ax.hist(alldelays, bins=np.arange(0, 30, 0.5),#bottom=np.min(tmp),
+                                           label='All (hist.)', color='black', facecolor='grey', alpha=1., rwidth=2.0,
                                            normed=True, histtype='step',log=log)#, bottom=1.)
             else:
                 ax.fill_between(xh,1, tmphist/np.max(tmphist), label='All (hist.)', linewidth=2.0, color='black', facecolor='white', alpha=1.)
                 ax.plot(np.sort(flat), tmp, label='All (cumul.)', linewidth=2.0, color='grey', alpha=0.9)
-                
+
             ylim = [np.max([.001,1./len(flat)]),1.]
 
         keys = sorted_keys[g:g+7]
@@ -225,4 +247,3 @@ if __name__ == '__main__':
     delays, first, last = envelope_delays(args.fin, args.fout, maxcount=1000000,
                              new=args.new)
     plot_hist(delays, first, last, stations=args.stations, noshow=args.noshow)
-

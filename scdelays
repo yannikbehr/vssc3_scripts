@@ -1,0 +1,117 @@
+#!/bin/sh
+#
+# script of experimentations on delays analysis
+#
+# @author fmassin
+#
+# to do 
+#    -better argument def with default
+#    -
+
+
+PMETH="Trigger"
+#PMETH="AIC"
+#HOST="192.168.44.167"
+#HOST="192.168.44.168"
+#HOST="192.168.44.170"
+HOST="192.168.44.177"
+PORT="3306"
+VSSC3="/home/sysop/Documents/delays_analysis/vssc3_scripts/"
+#VSSC3="../../programs/vssc3_scripts"
+USER="sysop"
+PWORD="sysop"
+DB="seiscomp3"
+DBT="mysql"
+
+RTIME="1"
+RSPAN="30days"
+
+END="$( date +%F_%H-%M-%S )"
+DATADIR="data/${HOST}"
+PLOTDIR="plots/"
+
+LOGFILE="$0.log"
+touch $LOGFILE
+echo Log file : $LOGFILE
+echo "" >> $LOGFILE
+echo "---------- New experiment !" >> $LOGFILE
+date >> $LOGFILE
+
+envelopes=""
+
+for var in "$@"
+do
+    case "$var" in
+        data_latency)
+            
+            mkdir -p $DATADIR
+            for RTIME in "0.16" "1" "24"; do
+                
+                data_latency="$VSSC3/data_latency.py --runtime $RTIME  --dbname $DATADIR/${END}_data_latencies_${RTIME}hrs.sqlite3 "
+                
+                echo $data_latency >> $LOGFILE
+                $data_latency &>> $LOGFILE && echo "... done:" $data_latency >> $LOGFILE  &
+                sleep 5s
+            done
+            ;;
+
+        pick_delay)
+            
+            mkdir -p $DATADIR
+            for RSPAN in "10days" "30days" "90days"; do
+                
+                START="$( date +%FT%T -d -$RSPAN )"
+                
+                pick_delay="$VSSC3/vssc3_pick_delays.py --host $HOST --port $PORT -u $USER -p $PWORD -d $DB --dbtype $DBT --pickmethod $PMETH -o $DATADIR/${END}_data_picks_${RSPAN}_${PMETH}.txt --new --start $START --end $END"
+            
+                echo $pick_delay >> $LOGFILE
+                $pick_delay &>> $LOGFILE && echo "... done:" $pick_delay >> $LOGFILE &
+                sleep 5s
+            done
+            ;;
+
+        origin_creation_time)
+            
+            mkdir -p $DATADIR
+            for RSPAN in "10days" "30days" "90days"; do
+                
+                START="$( date +%FT%T -d -$RSPAN )"
+                
+                origin_creation_time="$VSSC3/vssc3_origin_creation_time.py --host $HOST --port $PORT -u $USER -p $PWORD -d $DB --dbtype $DBT -o $DATADIR/${END}_data_origin_${RSPAN}.npz --new --start $START --end $END"
+                echo $origin_creation_time >> $LOGFILE
+                $origin_creation_time &>> $LOGFILE && echo "... done:" $origin_creation_time >> $LOGFILE &
+                sleep 5s
+            done
+            ;;
+
+        plots)
+
+            mkdir -p $PLOTDIR
+            find data -name data_* | awk -F"[/_.]" '{print $0, "plot_"$2"."$3"."$4"."$5"_"$8"_"$9"_"$10"_"$6".pdf", $8}' | while read F P D; 
+                do
+                    P=${P/_npz}
+                    if [[ $D == "picks" ]]
+                    then
+                        python $VSSC3/vssc3_pick_delays.py -o $F --plotfile $PLOTDIR/$P --noshow
+                    elif [[ $D == "origins" ]]
+                    then
+                        python $VSSC3/vssc3_origin_creation_time.py -o $F --plotfile $PLOTDIR/$P --noshow
+                    fi
+                    ls $PLOTDIR/$P 2>>/dev/null&& echo  $PLOTDIR/$P
+
+                done
+
+
+            ;;
+
+        *)
+            echo $"Usage: $0 {data_latency|pick_delay|origin_creation_time|plots}"
+            echo No valid request >> $LOGFILE
+            exit 1
+    esac
+done
+
+
+
+
+

@@ -5,9 +5,18 @@ Created on Nov 7, 2013
 
 @author: behry
 """
-import psycopg2
-import psycopg2.extras
-import MySQLdb
+try:
+    import psycopg2
+    import psycopg2.extras
+    import MySQLdb
+except:
+    print('no psycopg2')
+    
+try:
+    import MySQLdb
+except:
+    print('no MySQLdb')
+
 from obspy import UTCDateTime
 import numpy as np
 import matplotlib.pyplot as plt
@@ -112,10 +121,10 @@ class PickDelay:
                     max_del_st = _s
                     max_del_pct = _pct
 
-        print "Earliest pick: %s %s (delay: %.2f)" % (min_pct_st, min_pct, min_pct_del)
-        print "Latest pick: %s %s (delay: %.2f)" % (max_pct_st, max_pct, max_pct_del)
-        print "Minimum delay: %s %s (delay: %.2f)" % (min_del_st, min_del_pct, min_del)
-        print "Maximum delay: %s %s (delay: %.2f)" % (max_del_st, max_del_pct, max_del)
+        print("Earliest pick: %s %s (delay: %.2f)" % min_pct_st, min_pct, min_pct_del)
+        print("Latest pick: %s %s (delay: %.2f)" % max_pct_st, max_pct, max_pct_del)
+        print("Minimum delay: %s %s (delay: %.2f)" % min_del_st, min_del_pct, min_del)
+        print("Maximum delay: %s %s (delay: %.2f)" % max_del_st, max_del_pct, max_del)
 
     def plot_delays(self, fout, networks=[], noshow=False):
         fig = plt.figure()
@@ -142,7 +151,7 @@ class PickDelay:
         sorted_keys = (sorted_keys[ np.argsort(Npicks)[::-1] ]).tolist()
 
         if args.summary:
-            print "Summary by network"
+            print("Summary by network")
             for _n in sorted_keys:
                 min_pct_st = stations_corresponding_to_delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
                 min_pct_del = delays[_n][np.argmin(pct_corresponding_to_delays[_n])]
@@ -160,11 +169,11 @@ class PickDelay:
                 max_del_pct = pct_corresponding_to_delays[_n][np.argmax(delays[_n])]
                 max_del = np.max(delays[_n])
 
-                print "- %s (%i picks) -" % (_n, len(delays[_n]) )
-                print "%s earliest pick: %s %s (delay: %.2f)" % (_n, min_pct_st, min_pct, min_pct_del)
-                print "%s latest pick: %s %s (delay: %.2f)" % (_n, max_pct_st, max_pct, max_pct_del)
-                print "%s minimum delay: %s %s (delay: %.2f)" % (_n, min_del_st, min_del_pct, min_del)
-                print "%s maximum delay: %s %s (delay: %.2f)" % (_n, max_del_st, max_del_pct, max_del)
+                print("- %s (%i picks) -" % _n, len(delays[_n]) )
+                print("%s earliest pick: %s %s (delay: %.2f)" % _n, min_pct_st, min_pct, min_pct_del)
+                print("%s latest pick: %s %s (delay: %.2f)" % _n, max_pct_st, max_pct, max_pct_del)
+                print("%s minimum delay: %s %s (delay: %.2f)" % _n, min_del_st, min_del_pct, min_del)
+                print("%s maximum delay: %s %s (delay: %.2f)" % _n, max_del_st, max_del_pct, max_del)
 
 
         big_enough = np.min([ 15, np.sum( Npicks > np.max(Npicks)/20.) ])
@@ -212,7 +221,7 @@ class PickDelay:
                 plt.show()
 
         else:
-            print 'No data found for ', networks
+            print('No data found for ', networks)
 
 if __name__ == '__main__':
     import argparse

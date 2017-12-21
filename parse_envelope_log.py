@@ -81,7 +81,7 @@ def envelope_delays(fin, delayfile=None, maxcount=1000000, new=False, networks=[
                             old_ct = streams[wID][old_ts]
                             tdiff += (currentTime - old_ct)
                             # tdiff = currentTime - old_ct
-                        except Exception, e:
+                        except :#Exception, e:
                             logging.debug('%s %s: %s' % (wID, old_ts, e))
                             continue
                     else:
@@ -93,11 +93,11 @@ def envelope_delays(fin, delayfile=None, maxcount=1000000, new=False, networks=[
                     delays[station].append(tdiff)
                     cnt += 1
                 else:
-                    print "problem with line %d" % cnt
-                    print line
+                    print("problem with line %d" % cnt)
+                    print( line)
                     break
-        print first
-        print last
+        print(first)
+        print(last)
         f.close()
         fh = open(delayfile, 'w')
         json.dump({'delays':delays,'first':str(first),'last':str(last)}, fh)

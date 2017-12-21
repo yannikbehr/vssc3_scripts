@@ -5,6 +5,7 @@ Created on Nov 15, 2016
 
 @author: fmassin
 """
+import copy
 import matplotlib
 from collections import defaultdict
 #matplotlib.use('WXAgg')
@@ -27,7 +28,7 @@ from obspy.core.inventory.util import Equipment
 
 
 from parse_envelope_log import envelope_delays
-from analyse_data_latencies import get_data_latencies
+from analyse_data_latencies import get_data_latencies ##### THIS IS DELAYS NOT LATENCIES
 from vssc3_pick_delays import PickDelay
 
 def get_pick_delays(jsonfile, host=None, database=None, user=None,
@@ -64,6 +65,7 @@ def get_pick_delays(jsonfile, host=None, database=None, user=None,
 
 
 def boost_inventory(clienturl = 'http://165.98.224.52:8081/',
+                    lat=11.984562, lon=-86.168006, maxradius=5.,
                     toaddtoinventory = '/Users/fmassin/Google Drive/Projects/SED-EEW/INETER/documentation on INETER/telemetry/Sismic Stations.csv',
                     separator = '|',
                     boost_level = ['sta'],
@@ -81,8 +83,8 @@ def boost_inventory(clienturl = 'http://165.98.224.52:8081/',
         endtime = UTCDateTime()
         inventory = client.get_stations(network="*", station="*", level="RESP",
                                         starttime=starttime, endtime=endtime,
-                                        lat=11.984562, lon=-86.168006,
-                                        minradius=0.0,maxradius=5.)
+                                        lat=lat, lon=lon,
+                                        minradius=0.0,maxradius=maxradius)
     stationsfile = [x.split(separator) for x in open(toaddtoinventory).readlines()]
     for n,net in enumerate(inventory):
         for s,sta in enumerate(net):
@@ -220,36 +222,41 @@ def delay_split(delays_in, inventory=read_inventory(), fout=None, summarises=Fal
         if tele in telemetries or '*' in telemetries :
             #if  'None' != tele:
             delays[tele] += delays_in[_ns]
+            delays['All'] += delays_in[_ns]
         elif logg in data_loggers or '*' in data_loggers :
             #if 'None' != logg:
             delays[logg] += delays_in[_ns]
+            delays['All'] += delays_in[_ns]
         elif sensor in sensors or '*' in sensors :
             #if 'None' != sensor:
             delays[sensor] += delays_in[_ns]
+            delays['All'] += delays_in[_ns]
         elif sp in sample_rates or '*' in sample_rates :
             try:
                 int(sp)
                 delays[str(sp)] += delays_in[_ns]
+                delays['All'] += delays_in[_ns]
             except:
                 pass
         elif str(stat) in stations or '*' in stations :
             #if 'None' != stat:
             delays[stat] += delays_in[_ns]
+            delays['All'] += delays_in[_ns]
         elif str(net) in networks or '*' in networks :
             #if 'None' != net:
             delays[net] += delays_in[_ns]
 
-        delays['All'] += delays_in[_ns]
+            delays['All'] += delays_in[_ns]
 
 
 
-    flat =  [elem for elem in delays['All'] if elem <=300 and elem>-1]
+    flat =  [elem for elem in delays['All'] if elem <=40 and elem>=0]
     statistics = [np.nanmedian(flat) ,          #delays['All'])
                   np.nanstd(flat) ,             #delays['All'])
                   scoreatpercentile(flat, 16) , #delays['All'], 16)#flat, 16)#
                   scoreatpercentile(flat, 84) ,
-                  scoreatpercentile(flat, 99.9) ,
-                  scoreatpercentile(flat, .1) ] #delays['All'], 84)#flat, 84)#
+                  scoreatpercentile(flat, 99.99) ,
+                  scoreatpercentile(flat, .01) ] #delays['All'], 84)#flat, 84)#
 
     Ndl=list(np.zeros(len(delays))+statistics[4])
     Sdl=list(np.zeros(len(delays))+statistics[4])
@@ -263,21 +270,21 @@ def delay_split(delays_in, inventory=read_inventory(), fout=None, summarises=Fal
         tmpy = np.arange(len(tmpx))*1.
         if not str(_n) == str('All'):
             Ndl[_in] =  len( tmpx) #/np.nanmax(tmpy) ) )
-            Sdl[_in] =  np.nanmean( tmpx) #/np.nanmax(tmpy) ) )
+            Sdl[_in] =  np.nanmedian( tmpx) #/np.nanmax(tmpy) ) )
         delays_x[_n] = list(tmpx)
         delays_c[_n] = list(tmpy)
         if norms_hists:
             delays_c[_n] /= np.nanmax(tmpy)
 
-    sorted_keys = np.asarray(delays.keys())
-    sorted_keys = (sorted_keys[ np.argsort(Sdl)[::-1] ]).tolist()
+    sorted_keys = np.asarray(list(delays.keys()))
+    sorted_keys = (sorted_keys[ (np.argsort(Sdl)[::-1]).tolist() ]).tolist()
     sorted_keys.remove('All')
 
     Sdl=list(np.zeros(len(sorted_keys))+statistics[4])
     Ndl=list(np.zeros(len(sorted_keys))+statistics[4])
     for _in, _n in enumerate(sorted_keys):
         tmpx = np.sort([elem for elem in delays[_n] if elem<=statistics[4] and elem>=statistics[5]])
-        Sdl[_in] =  np.nanmean( tmpx)
+        Sdl[_in] =  np.nanmedian( tmpx) ######################################
         Ndl[_in] =  len(tmpx)
 
     inventories=inv_split(inventory, sorted_keys, Sdl, Ndl, summarises, fout)
@@ -307,50 +314,110 @@ def delay_split(delays_in, inventory=read_inventory(), fout=None, summarises=Fal
 
 def maps(delays_in, fout=None, inventory=read_inventory(), summarises=False,
          networks=[], telemetries=[], data_loggers=[], sensors=[],
-         sample_rates=[], stations=[], norms_hists=False, lat_lim=None, lon_lim=None, **kwargs):
+         sample_rates=[], stations=[],
+         norms_hists=False, lat_lim=None, lon_lim=None,
+         delaytype='Data',
+         fig=None,
+         fsize=14,
+         msize=100,
+         lloc='lower left',
+         colors=['C'+str(n) for n in range(10)],
+         vmin=0.5,vmax=40,
+         **kwargs):
 
     delays, sorted_keys, delays_x, delays_c, statistics, Ndl, inventories = delay_split(delays_in, inventory,
                                                                       fout, summarises, norms_hists,
                                                                       networks, telemetries, data_loggers,
                                                                       sensors, sample_rates, stations)
 
-    colors = ['b', 'g', 'r','c', 'm', 'y', 'k']
     flat=[statistics[4]]
-    fig=(inventory.select(network='NU')).plot(projection='local',label=False, color='w',  **kwargs)
-    #(plt.gca()).scatter(0,0, s=100, marker='v', edgecolor='k', label='Off', color='w')
+    
+    if not fig:
+        test = copy.deepcopy(inventories[0])
+        for inv in inventories:
+            test+=inv
+        
+        fig=test.plot(projection='local',label=False, color='none',size=msize, **kwargs)
+        #(plt.gca()).scatter(0,0, s=100, marker='v', edgecolor='k', label='Off', color='w')
 
-    for i, inv in reversed(list(enumerate(inventories))):
+    for i, inv in list(enumerate(inventories))[::-1]:
 
         if i<6:
             #if not fig:
             #    fig = inv.plot(projection="local", color=colors[i] , label=False)
             #else:
-            inv.plot(fig=fig, projection="local", color=colors[min([i, 6])] , label=False, **kwargs)
+            inv.plot(fig=fig, projection="local", color=colors[min([i, 6])] ,size=msize, label=False, **kwargs)
+            
 
-            (plt.gca()).scatter(0,0, s=100, marker='v', edgecolor='k', label=inv.source, color=colors[i])
+            #plt.gca()).scatter(0,0, s=100, marker='v', edgecolor='k', label=inv.source, color=colors[i])
+            fig.bmap.scatter(inv.networks[-1].stations[-1].longitude,
+                                inv.networks[-1].stations[-1].latitude,
+                                s=msize,marker='v', label=inv.source, color=colors[i],
+                                latlon=True)
 
         elif i>=6 :
             #if not fig:
             #    fig = inv.plot(projection="local", color=colors[min([i, 6])], label=False)
             #else:
-            inv.plot(fig=fig, projection="local", color=colors[6] , label=False, **kwargs)
+            inv.plot(fig=fig, projection="local", color=colors[6] ,size=msize, label=False, **kwargs)
 
             for _d in delays[inv.key]:
                 flat.append( _d )
 
     flat = [elem for elem in flat if elem<=30 and elem>=-1]
     if len(inventories) > 6 :
-        (plt.gca()).scatter(0,0,
-                            marker='v', s=100, edgecolor='k',
+        fig.bmap.scatter.scatter(inventories[-1].networks[-1].stations[-1].longitude,
+                            inventories[-1].networks[-1].stations[-1].latitude,
+                                 marker='v',
+                                 s=msize,# edgecolor='k',
                             label=str(len(inventories)-6+1)+' more types ('+str(np.nanmedian(flat))[:3]+'s)' ,
-                            color=colors[6])
+                            color=colors[6],
+                            latlon=True)
 
-    (plt.gca()).legend(loc='lower left', fancybox=True, framealpha=0.5)
+    x=[]
+    y=[]
+    d=[]
+    for inv in inventories:
+        for n in inv:
+            for s in n:
+                d.append(np.nanmedian(delays_in[n.code+'.'+s.code]))
+                x.append(s.longitude)
+                y.append(s.latitude)
+
+    hc = fig.bmap.scatter(x, y, msize, d,
+                          norm=matplotlib.colors.LogNorm(vmin=vmin,
+                                                         vmax=vmax),
+                          cmap=matplotlib.pyplot.cm.get_cmap('gray'),
+                          marker='v',
+                          edgecolor='none',
+                          latlon=True,
+                          zorder=9999
+                          )
+    cb = fig.bmap.colorbar(hc,
+                           "left",
+                           size="3%", pad='2%',
+                           label='%s delays (s, med.)'%(delaytype),
+                           extend='both')
+
+    cb.ax.yaxis.set_ticks_position('left')
+    cb.ax.yaxis.set_label_position('left')
+    cb.ax.set_yticklabels(cb.ax.get_yticklabels(), rotation='vertical')
+    
+    (plt.gca()).legend(loc=lloc,
+                       fancybox=True,
+                       framealpha=0.5,
+                       prop={'size':fsize})
     handles, labels = (plt.gca()).get_legend_handles_labels()
     i=labels.index(labels[-1])
     handles.insert(0, handles.pop(i))
     labels.insert(0, labels.pop(i))
-    (plt.gca()).legend(reversed(handles), reversed(labels), scatterpoints=1, loc='upper right', fancybox=True, framealpha=0.5)
+    (plt.gca()).legend(handles[::-1],
+                       labels[::-1],
+                       scatterpoints=1,
+                       loc=lloc,
+                       fancybox=True,
+                       framealpha=0.5,
+                       prop={'size':fsize})
 
 
     if lat_lim:
@@ -381,13 +448,8 @@ def hist(delays_in, fout=None, inventory=read_inventory(), summarises=False,norm
     if hists_types in ['step']:
         lw=1
 
-    delays, sorted_keys, delays_x, delays_c, statistics, Ndl, inventories = delay_split(delays_in, inventory,
-                                                                  fout, summarises, norms_hists,
-                                                                  networks, telemetries, data_loggers,
-                                                                  sensors, sample_rates, stations)
-    #print(delays)
-    #print('OK')
-    #return
+    delays, sorted_keys, delays_x, delays_c, statistics, Ndl, inventories = delay_split(delays_in,inventory,fout,summarises,  norms_hists,networks, telemetries, data_loggers,sensors, sample_rates, stations)
+
     if len(delays.keys()) > 0:
         if hists == 'exp':
             memhist = np.zeros(1000)
@@ -430,11 +492,12 @@ def hist(delays_in, fout=None, inventory=read_inventory(), summarises=False,norm
                         alpha=.8)
 
             ax.fill_between(delays_x['All'],
-                            np.nanmax(delays_c['All'])+np.nanmax(delays_c['All'])/100,
+                            1,#np.nanmax(delays_c['All'])+np.nanmax(delays_c['All'])/100,
                             delays_c['All'],
-                            label='All ('+str(len(delays['All']))+' delays)',
+                            label='All ('+str(len(delays['All']))+' dt)',
                             linewidth=2.0,
-                            facecolor='None')
+                            facecolor='w',
+                            edgecolor='k')
 
         else:
             weights = [ list(np.ones([len(delays_x[_n])])) for _n in sorted_keys]
@@ -451,7 +514,7 @@ def hist(delays_in, fout=None, inventory=read_inventory(), summarises=False,norm
             #n, bins, patches =
             ax.hist(delays_x['All'],
                     bins=np.logspace(np.log10(statistics[5]), np.log10(statistics[4]), 100),#
-                    label='All ('+str(len(delays['All']))+' delays)' ,
+                    label='All ('+str(len(delays['All']))+' dt)' ,
                     histtype='step', color='black',
                     normed=norms_hists,
                     linewidth=1.5,rwidth=1.)
@@ -463,33 +526,40 @@ def hist(delays_in, fout=None, inventory=read_inventory(), summarises=False,norm
             #ax.set_ylim(top=np.nanmax(n))
 
         if norms_hists:
-            ax.set_ylim(top=1.)
+            ax.set_ylim([0,1])
 
-        ax.set_xlim(left= (np.min(ax.get_xlim())+np.diff(ax.get_xlim())/100.)[0])
-        ylim = ax.get_ylim()
-
-        ax.set_xlim([statistics[5],statistics[4]])
         ax.set_xscale('log')
         ax.set_xlim([statistics[5],statistics[4]])
+        ylim = ax.get_ylim()
 
-        ax.add_patch(Rectangle((statistics[0], ylim[0]),
-            0., np.max([1., ylim[-1]]),
-            zorder=-1, edgecolor='grey',facecolor='grey',linewidth=3,label='$\sigma$: %.1f s' % (statistics[0])))
+        ax.plot([statistics[0], statistics[0]],
+                [0., np.max([1., ylim[-1]])],
+                zorder=-1,
+                color='grey',
+                linewidth=2,
+                label='$\~{dt}$ %.1fs' % (statistics[0]))
 
         ax.add_patch(Rectangle((statistics[2],ylim[0]),
-            statistics[3]-statistics[2], np.max([1., ylim[-1]]),
-            zorder=-2, alpha=0.6, facecolor='grey', linewidth=0, label=r'84$^{th}$: %.1f s' % (statistics[3]) ))
-        #ax.add_patch(Rectangle((med-std,ylim[0]),
-        #    std*2, ylim[-1],
-        #    zorder=0, alpha=0.2, facecolor='grey', linewidth=0, label=r'$\sigma$: '+str(std)+'s' ))
+                               statistics[3]-statistics[2], np.max([1., ylim[-1]]),
+                               zorder=-2,
+                               alpha=0.6,
+                               facecolor='grey',
+                               linewidth=0,
+                               label=r'84$^{th}_{dt}$ %.1fs' % (statistics[3]) ))
+
         ax.add_patch(Rectangle((0,ylim[0]),
-            statistics[2], np.max([1., ylim[-1]]),
-            zorder=-3, alpha=0.2, facecolor='grey', linewidth=0, label=r'16$^{th}$: %.1f s ' % (statistics[2]) ))
+                               statistics[2], np.max([1., ylim[-1]]),
+                               zorder=-3,
+                               alpha=0.2,
+                               facecolor='grey',
+                               linewidth=0,
+                               label=r'16$^{th}_{dt}$ %.1fs ' % (statistics[2]) ))
 
 
 
     if norms_hists:
         ylabel='Percent'
+        ax.set_yticklabels([str(int(t*100)) for t in ax.get_yticks()])
     else:
         ylabel='Count'
     if hists in ['c', 'cum', 'cumulated']:
@@ -498,7 +568,7 @@ def hist(delays_in, fout=None, inventory=read_inventory(), summarises=False,norm
         ylabel=ylabel+' (binned)'
 
     ax.set_ylabel(ylabel)
-    ax.set_xlabel('Delay times [s]')
+    ax.set_xlabel('Delay times (s)')
 
     if  first and last:
         ax.set_title(r''+'Delays distributions\n $\stackrel{From\ '+str(first)+'}{To\ '+str(last)+'}$')

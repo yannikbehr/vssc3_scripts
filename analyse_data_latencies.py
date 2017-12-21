@@ -10,7 +10,10 @@ import sqlite3
 
 import matplotlib
 matplotlib.use('WXAgg')
-import wx
+try:
+    import wx
+except:
+    print('no wx')
 import matplotlib.pyplot as plt
 import numpy as np
 #from Scientific.IO.NetCDF import NetCDFFile as Dataset
@@ -90,7 +93,7 @@ def plot_data_latencies(delays, fout, delaysfile, map=False, fnmap=None,
         plt.savefig(fout, dpi=300)
         plt.show()
     else:
-        print 'No data found for ', networks
+        print( 'No data found for ', networks)
 
     # Plot a map showing the median for each station
     if map:
